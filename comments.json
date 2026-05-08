@@ -1,0 +1,128 @@
+[
+  {
+    "id": 1,
+    "film_id": 2,
+    "film_title": "Get Out",
+    "text": "the movie is so good",
+    "sentiment": "😊 Content",
+    "style": "joy",
+    "date": "2026-05-08 13:38"
+  },
+  {
+    "id": 2,
+    "film_id": 2,
+    "film_title": "Get Out",
+    "text": "the movie is so bad",
+    "sentiment": "😊 Content",
+    "style": "joy",
+    "date": "2026-05-08 13:38"
+  },
+  {
+    "id": 3,
+    "film_id": 2,
+    "film_title": "Get Out",
+    "text": "the movie is  bad",
+    "sentiment": "😊 Content",
+    "style": "joy",
+    "date": "2026-05-08 13:38"
+  },
+  {
+    "id": 4,
+    "film_id": 2,
+    "film_title": "Get Out",
+    "text": "the movie is  awfull",
+    "sentiment": "😊 Content",
+    "style": "joy",
+    "date": "2026-05-08 13:38"
+  },
+  {
+    "id": 5,
+    "film_id": 2,
+    "film_title": "Get Out",
+    "text": "the movie is  not good",
+    "sentiment": "😊 Content",
+    "style": "joy",
+    "date": "2026-05-08 13:38"
+  },
+  {
+    "id": 6,
+    "film_id": 2,
+    "film_title": "Get Out",
+    "text": "the movie is  normal",
+    "sentiment": "😊 Content",
+    "style": "joy",
+    "date": "2026-05-08 13:38"
+  },
+  {
+    "id": 7,
+    "film_id": 3,
+    "film_title": "Inception",
+    "text": "the movie is normal",
+    "sentiment": "😐 Neutre",
+    "style": "neutral",
+    "date": "2026-05-08 14:05"
+  },
+  {
+    "id": 8,
+    "film_id": 3,
+    "film_title": "Inception",
+    "text": "the movie is not good",
+    "sentiment": "😠 En colère",
+    "style": "anger",
+    "date": "2026-05-08 14:06"
+  },
+  {
+    "id": 9,
+    "film_id": 3,
+    "film_title": "Inception",
+    "text": "the movie is not awful",
+    "sentiment": "😠 En colère",
+    "style": "anger",
+    "date": "2026-05-08 14:06"
+  },
+  {
+    "id": 10,
+    "film_id": 3,
+    "film_title": "Inception",
+    "text": "the movie isso good",
+    "sentiment": "😊 Content",
+    "style": "joy",
+    "date": "2026-05-08 14:06"
+  },
+  {
+    "id": 11,
+    "film_id": 3,
+    "film_title": "Inception",
+    "text": "it was so sad",
+    "sentiment": "😢 Triste",
+    "style": "sadness",
+    "date": "2026-05-08 14:07"
+  },
+  {
+    "id": 12,
+    "film_id": 3,
+    "film_title": "Inception",
+    "text": "it was so surprised",
+    "sentiment": "😲 Surpris",
+    "style": "surprise",
+    "date": "2026-05-08 14:07"
+  },
+  {
+    "id": 13,
+    "film_id": 3,
+    "film_title": "Inception",
+    "text": "it was so satisfied",
+    "sentiment": "😨 Peur",
+    "style": "fear",
+    "date": "2026-05-08 14:07"
+  },
+  {
+    "id": 14,
+    "film_id": 3,
+    "film_title": "Inception",
+    "text": "it was so scared",
+    "sentiment": "😨 Peur",
+    "style": "fear",
+    "date": "2026-05-08 14:08"
+  }
+]
