@@ -3,6 +3,8 @@ import joblib, re, nltk, speech_recognition as sr, io, os, json
 from datetime import datetime
 import pandas as pd
 import numpy as np
+import psycopg2
+from passlib.hash import pbkdf2_sha256
 
 try:
     import matplotlib.pyplot as plt
@@ -20,128 +22,139 @@ stop_words -= {"not", "no", "nor", "never", "neither", "nobody", "nothing", "now
 
 st.set_page_config(page_title="CineStream", page_icon="🎬", layout="wide", initial_sidebar_state="expanded")
 
-st.markdown("""
+# ── Theme Management ──────────────────────────────────────────────────
+if "theme" not in st.session_state:
+    st.session_state.theme = "Dark"
+
+def toggle_theme():
+    st.session_state.theme = "Light" if st.session_state.theme == "Dark" else "Dark"
+
+is_dark = st.session_state.theme == "Dark"
+
+# Base colors
+bg_color = "radial-gradient(circle at top right, #1e1e2e, #111119)" if is_dark else "#f8f9fa"
+text_color = "#e5e5e5" if is_dark else "#2d3436"
+glass_bg = "rgba(255, 255, 255, 0.03)" if is_dark else "rgba(0, 0, 0, 0.02)"
+glass_border = "rgba(255, 255, 255, 0.05)" if is_dark else "rgba(0, 0, 0, 0.05)"
+card_bg = "rgba(255,255,255,0.02)" if is_dark else "#ffffff"
+sidebar_bg = "#111119" if is_dark else "#ffffff"
+
+st.markdown(f"""
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
     /* Global Styles */
-    #MainMenu, footer {visibility: hidden;}
-    .stApp {
-        background: radial-gradient(circle at top right, #1e1e2e, #111119)!important;
-        color: #e5e5e5;
+    #MainMenu, footer {{visibility: hidden;}}
+    .stApp {{
+        background: {bg_color}!important;
+        color: {text_color}!important;
         font-family: 'Outfit', sans-serif;
-    }
+    }}
+    
+    /* Force text color on all basic elements in Light mode */
+    .stApp p, .stApp span, .stApp div, .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp h4 {{
+        color: {text_color};
+    }}
     
     /* Custom Scrollbar */
-    ::-webkit-scrollbar {width: 8px;}
-    ::-webkit-scrollbar-track {background: #111;}
-    ::-webkit-scrollbar-thumb {background: #E50914; border-radius: 10px;}
+    ::-webkit-scrollbar {{width: 8px;}}
+    ::-webkit-scrollbar-track {{background: {"#111" if is_dark else "#eee"};}}
+    ::-webkit-scrollbar-thumb {{background: #E50914; border-radius: 10px;}}
 
     /* Glassmorphism Components */
-    .glass-card {
-        background: rgba(255, 255, 255, 0.03);
+    .glass-card {{
+        background: {glass_bg};
         backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        border: 1px solid {glass_border};
         border-radius: 15px;
         padding: 20px;
         transition: all 0.3s ease;
-    }
+        color: {text_color};
+    }}
 
-    /* Hero Section Upgraded */
-    .hero {
+    /* Hero Section */
+    .hero {{
         position: relative;
         height: 550px;
         border-radius: 20px;
         overflow: hidden;
         margin: 20px 48px 40px;
-        box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-    }
-    .hero img {width: 100%; height: 100%; object-fit: cover; filter: brightness(0.5);}
-    .hero-grad {
+        box-shadow: 0 20px 50px rgba(0,0,0,{"0.5" if is_dark else "0.1"});
+    }}
+    .hero img {{width: 100%; height: 100%; object-fit: cover; filter: brightness({"0.5" if is_dark else "0.8"});}}
+    .hero-grad {{
         position: absolute;
         inset: 0;
-        background: linear-gradient(to right, rgba(17,17,25,0.95) 20%, rgba(17,17,25,0.4) 50%, transparent);
-    }
-    .hero-content {
+        background: {"linear-gradient(to right, rgba(17,17,25,0.95) 20%, rgba(17,17,25,0.4) 50%, transparent)" if is_dark else "linear-gradient(to right, rgba(255,255,255,0.9) 20%, rgba(255,255,255,0.2) 50%, transparent)"};
+    }}
+    .hero-content {{
         position: absolute;
         bottom: 80px;
         left: 60px;
         max-width: 650px;
         animation: fadeInUp 1s ease-out;
-    }
-    @keyframes fadeInUp {
-        from {opacity: 0; transform: translateY(30px);}
-        to {opacity: 1; transform: translateY(0);}
-    }
-    .hero-badge {
-        background: linear-gradient(90deg, #E50914, #ff4d4d);
-        color: #fff;
-        padding: 5px 15px;
-        border-radius: 50px;
-        font-size: 12px;
-        font-weight: 700;
-        text-transform: uppercase;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 20px;
-    }
+    }}
+    .hero-content h1, .hero-content p, .hero-content span {{ 
+        color: {"#fff" if is_dark else "#111"}!important; 
+    }}
 
     /* Film Cards */
-    .film-card {
-        background: rgba(255,255,255,0.02);
+    .film-card {{
+        background: {card_bg};
         border-radius: 16px;
         overflow: hidden;
         transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        border: 1px solid rgba(255,255,255,0.05);
+        border: 1px solid {glass_border};
         height: 100%;
         position: relative;
-    }
-    .film-card:hover {
+        box-shadow: {"none" if is_dark else "0 10px 20px rgba(0,0,0,0.05)"};
+    }}
+    .film-card:hover {{
         transform: scale(1.03);
-        background: rgba(255,255,255,0.05);
+        background: {"rgba(255,255,255,0.05)" if is_dark else "#fff"};
         border-color: rgba(229,9,20,0.3);
-        box-shadow: 0 15px 35px rgba(0,0,0,0.4), 0 0 20px rgba(229,9,20,0.1);
-    }
-    .film-card img {
-        width: 100%;
-        height: 300px;
-        object-fit: cover;
-        transition: transform 0.5s ease;
-    }
-    .film-card:hover img {transform: scale(1.1);}
-    
-    .card-body {padding: 18px;}
-    .card-title {font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 8px;}
-    .card-genre {color: #E50914; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px;}
+        box-shadow: 0 15px 35px rgba(0,0,0,{"0.4" if is_dark else "0.1"}), 0 0 20px rgba(229,9,20,0.1);
+    }}
+    .card-title {{ color: {"#fff" if is_dark else "#111"}!important; }}
+    .card-row {{ color: {"#ccc" if is_dark else "#555"}!important; }}
+    .card-desc {{ color: {"#bbb" if is_dark else "#666"}!important; }}
 
-    /* Comment Cards Upgraded */
-    .comment-card {
-        background: rgba(255,255,255,0.03);
+    /* Comment Cards */
+    .comment-card {{
+        background: {glass_bg};
         border-radius: 12px;
         padding: 16px;
         margin-bottom: 12px;
         border-left: 4px solid #444;
         backdrop-filter: blur(5px);
-    }
-    .comment-card.joy { border-left-color: #00ff88; box-shadow: inset 50px 0 50px -50px rgba(0,255,136,0.1); }
-    .comment-card.anger { border-left-color: #ff4d4d; box-shadow: inset 50px 0 50px -50px rgba(255,77,77,0.1); }
-    .comment-card.sadness { border-left-color: #00d4ff; box-shadow: inset 50px 0 50px -50px rgba(0,212,255,0.1); }
-    .comment-card.fear { border-left-color: #bd00ff; box-shadow: inset 50px 0 50px -50px rgba(189,0,255,0.1); }
-    .comment-card.surprise { border-left-color: #ffaa00; box-shadow: inset 50px 0 50px -50px rgba(255,170,0,0.1); }
-    .comment-card.neutral { border-left-color: #888; }
+        color: {text_color};
+    }}
+    .comment-text {{ color: {text_color}!important; }}
+    .comment-footer {{ color: {"#888" if is_dark else "#555"}!important; }}
 
-    /* Admin Dashboard Metrics */
-    div[data-testid="stMetric"] {
-        background: rgba(255,255,255,0.03)!important;
-        border: 1px solid rgba(255,255,255,0.05)!important;
+    /* Sidebar */
+    section[data-testid="stSidebar"] {{
+        background-color: {sidebar_bg}!important;
+    }}
+    section[data-testid="stSidebar"] p, section[data-testid="stSidebar"] span, section[data-testid="stSidebar"] label {{
+        color: {text_color}!important;
+    }}
+
+    /* Metrics */
+    div[data-testid="stMetric"] {{
+        background: {glass_bg}!important;
+        border: 1px solid {glass_border}!important;
         border-radius: 15px!important;
         padding: 20px!important;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-    }
+        color: {text_color}!important;
+    }}
+    div[data-testid="stMetricValue"] {{ color: {text_color}!important; }}
+    div[data-testid="stMetricLabel"] {{ color: {"#888" if is_dark else "#444"}!important; }}
     
+    .section-title {{ color: {"#fff" if is_dark else "#111"}!important; }}
+
     /* Buttons and Inputs */
-    .stButton>button {
+    .stButton>button {{
         background: linear-gradient(90deg, #E50914, #b20710)!important;
         color: white!important;
         border: none!important;
@@ -150,64 +163,121 @@ st.markdown("""
         font-weight: 700!important;
         letter-spacing: 0.5px!important;
         box-shadow: 0 4px 15px rgba(229,9,20,0.3)!important;
-    }
-    .stTextArea textarea {
-        background: rgba(255,255,255,0.05)!important;
-        border: 1px solid rgba(255,255,255,0.1)!important;
-        border-radius: 12px!important;
+    }}
+    /* Force white text inside buttons specifically */
+    .stButton>button div, .stButton>button p, .stButton>button span {{
         color: white!important;
-    }
+    }}
 
-    /* Titles */
-    .section-title {
-        font-size: 24px;
-        font-weight: 800;
-        color: #fff;
-        padding: 0 48px;
-        margin: 30px 0 20px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-    .section-title i { color: #E50914; }
+    .stTextArea textarea {{
+        background: {"rgba(255,255,255,0.05)" if is_dark else "rgba(0,0,0,0.03)"}!important;
+        border: 1px solid {"rgba(255,255,255,0.1)" if is_dark else "rgba(0,0,0,0.1)"}!important;
+        border-radius: 12px!important;
+        color: {text_color}!important;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
 # ── Models ──────────────────────────────────────────────────────────
-@st.cache_resource
+# @st.cache_resource
 def load_models():
     try:
-        if os.path.exists('sentiment_model.pkl') and os.path.exists('vectorizer.pkl'):
-            return joblib.load('sentiment_model.pkl'), joblib.load('vectorizer.pkl')
-    except: pass
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(base_path, 'sentiment_model.pkl')
+        vec_path = os.path.join(base_path, 'vectorizer.pkl')
+        if os.path.exists(model_path) and os.path.exists(vec_path):
+            return joblib.load(model_path), joblib.load(vec_path)
+    except Exception as e:
+        print(f"ERROR LOADING MODELS: {e}")
     return None, None
 
 model, vectorizer = load_models()
+if model is None:
+    st.error("⚠️ ERREUR : Le modèle d'IA n'est pas chargé. Vérifiez les logs.")
+else:
+    st.success("✅ Modèle d'IA chargé avec succès !")
 
 # ── Data ─────────────────────────────────────────────────────────────
-COMMENTS_FILE = "comments.json"
+# ── Database ────────────────────────────────────────────────────────
+DB_CONFIG = {
+    "host": "localhost",
+    "port": "5432",
+    "user": "postgres",
+    "password": "Goui3006",
+    "dbname": "Goui3006"
+}
 
-def load_comments():
-    if os.path.exists(COMMENTS_FILE):
-        try:
-            with open(COMMENTS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except: pass
-    return []
+def get_db_connection():
+    try:
+        return psycopg2.connect(**DB_CONFIG)
+    except:
+        return None
 
-def save_comment(film_id, film_title, text, sentiment, style):
-    comments = load_comments()
-    comments.append({
-        "id": len(comments) + 1,
-        "film_id": film_id,
-        "film_title": film_title,
-        "text": text,
-        "sentiment": sentiment,
-        "style": style,
-        "date": datetime.now().strftime("%Y-%m-%d %H:%M")
-    })
-    with open(COMMENTS_FILE, "w", encoding="utf-8") as f:
-        json.dump(comments, f, ensure_ascii=False, indent=2)
+def load_comments(film_id=None):
+    conn = get_db_connection()
+    if not conn: return []
+    try:
+        cur = conn.cursor()
+        if film_id:
+            cur.execute("SELECT id, film_id, film_title, text, sentiment, style, date FROM comments WHERE film_id = %s ORDER BY date DESC", (film_id,))
+        else:
+            cur.execute("SELECT id, film_id, film_title, text, sentiment, style, date FROM comments ORDER BY date DESC")
+        rows = cur.fetchall()
+        comments = []
+        for r in rows:
+            comments.append({
+                "id": r[0], "film_id": r[1], "film_title": r[2],
+                "text": r[3], "sentiment": r[4], "style": r[5],
+                "date": r[6].strftime("%Y-%m-%d %H:%M") if hasattr(r[6], 'strftime') else r[6]
+            })
+        cur.close()
+        conn.close()
+        return comments
+    except:
+        return []
+
+def save_comment(film_id, film_title, text, sentiment, style, user_id=None):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO comments (film_id, film_title, text, sentiment, style, user_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (film_id, film_title, text, sentiment, style, user_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except:
+        return False
+
+# ── Authentication ────────────────────────────────────────────────────
+def authenticate_user(username, password):
+    conn = get_db_connection()
+    if not conn: return None
+    cur = conn.cursor()
+    cur.execute("SELECT id, username, password, role FROM users WHERE username = %s", (username,))
+    user = cur.fetchone()
+    cur.close()
+    conn.close()
+    if user and pbkdf2_sha256.verify(password, user[2]):
+        return {"id": user[0], "username": user[1], "role": user[3]}
+    return None
+
+def register_user(username, password):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cur = conn.cursor()
+        hashed_pw = pbkdf2_sha256.hash(password)
+        cur.execute("INSERT INTO users (username, password) VALUES (%s, %s)", (username, hashed_pw))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except:
+        return False
 
 FILMS = [
     {"id":1,"title":"Interstellar","year":2014,"director":"Christopher Nolan","genre":"Sci-Fi","duration":"2h 49min","rating":8.7,"votes":"2.1M","description":"Une équipe d'astronautes voyage à travers un trou de ver pour trouver une nouvelle demeure pour l'humanité.","synopsis":"Alors que la Terre se meurt, un groupe d'explorateurs utilise un tunnel spatio-temporel pour dépasser les limites des voyages dans l'espace et parcourir les distances astronomiques qui séparent la Terre d'autres planètes.","cast":"Matthew McConaughey, Anne Hathaway, Jessica Chastain","poster":"https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg","backdrop":"https://image.tmdb.org/t/p/w1280/xJHokMbljvjADYdit5fK5VQsXEG.jpg"},
@@ -252,9 +322,10 @@ def predict(text):
         confidence = int(np.max(probs) * 100)
         
         pred = model.predict(vec)[0]
-        label, style, confidence = EMOTION_MAP.get(pred, ("❓ Inconnu", "neutral", 0))
+        label, style = EMOTION_MAP.get(pred, ("❓ Inconnu", "neutral"))
         return label, style, confidence
-    except:
+    except Exception as e:
+        print(f"PREDICTION ERROR: {e}")
         return "❓ Inconnu", "neutral", 0
 
 def get_top_keywords(emotion_name, top_n=10):
@@ -283,13 +354,18 @@ if "page" not in st.session_state:
     st.session_state.page = "home"
 if "film_id" not in st.session_state:
     st.session_state.film_id = None
+if "user" not in st.session_state:
+    st.session_state.user = None
 
 def go_home():
     st.session_state.page = "home"
     st.session_state.film_id = None
 
 def go_admin():
-    st.session_state.page = "admin"
+    if st.session_state.user and st.session_state.user['role'] == 'admin':
+        st.session_state.page = "admin"
+    else:
+        st.error("Accès réservé aux administrateurs.")
 
 def go_detail(film_id):
     st.session_state.page = "detail"
@@ -301,18 +377,62 @@ with st.sidebar:
     st.markdown('<h1 style="color:#E50914;font-size:28px;font-weight:800;margin-bottom:20px;"><i class="fas fa-film"></i> CINESTREAM</h1>', unsafe_allow_html=True)
     st.markdown("---")
     
-    # Navigation Buttons (Clean labels without emojis)
-    nav_choice = st.radio("NAVIGATION", ["Catalogue Films", "Dashboard Admin"], label_visibility="collapsed")
-    
-    if "Catalogue Films" in nav_choice:
-        if st.session_state.page == "admin":
-            go_home(); st.rerun()
+    # Sélecteur de Thème
+    st.markdown("---")
+    theme_icon = "☀️" if is_dark else "🌙"
+    theme_label = "Mode Clair" if is_dark else "Mode Sombre"
+    if st.button(f"{theme_icon} {theme_label}", use_container_width=True):
+        toggle_theme()
+        st.rerun()
+
+    # Section Authentification
+    st.markdown("---")
+    if st.session_state.user:
+        st.markdown(f"👤 Connecté : **{st.session_state.user['username']}**")
+        st.markdown(f"🏷️ Rôle : `{st.session_state.user['role'].upper()}`")
+        if st.button("🚪 Se déconnecter", use_container_width=True):
+            st.session_state.user = None
+            st.session_state.page = "home"
+            st.rerun()
     else:
-        if st.session_state.page != "admin":
-            go_admin(); st.rerun()
+        with st.expander("🔐 Connexion / Inscription", expanded=True):
+            auth_mode = st.radio("Action", ["Connexion", "Inscription"], label_visibility="collapsed")
+            u_input = st.text_input("Utilisateur", key="auth_u")
+            p_input = st.text_input("Mot de passe", type="password", key="auth_p")
+            
+            if auth_mode == "Connexion":
+                if st.button("Se connecter", use_container_width=True):
+                    user = authenticate_user(u_input, p_input)
+                    if user:
+                        st.session_state.user = user
+                        st.success(f"Bienvenue {u_input} !")
+                        st.rerun()
+                    else:
+                        st.error("Identifiants incorrects.")
+            else:
+                if st.button("Créer un compte", use_container_width=True):
+                    if u_input and p_input:
+                        if register_user(u_input, p_input):
+                            st.success("Compte créé ! Connectez-vous.")
+                        else:
+                            st.error("Pseudo déjà pris.")
+                    else:
+                        st.warning("Remplissez les champs.")
 
     st.markdown("---")
-    st.markdown('<div style="color:#888;font-size:14px;"><i class="fas fa-lightbulb" style="color:#f1c40f;"></i> <b>Astuce</b> : Utilisez le micro pour laisser des avis vocaux.</div>', unsafe_allow_html=True)
+    
+    # Navigation
+    if st.button("🏠 Accueil / Catalogue", use_container_width=True):
+        go_home()
+        st.rerun()
+        
+    if st.session_state.user and st.session_state.user['role'] == 'admin':
+        if st.button("📊 Dashboard Admin", use_container_width=True):
+            go_admin()
+            st.rerun()
+
+    st.markdown("---")
+    st.markdown('<div style="color:#888;font-size:13px;text-align:center;">Powered by PostgreSQL</div>', unsafe_allow_html=True)
 
 # Logo en haut de page pour le look
 st.markdown('<div style="padding:10px 0;text-align:center;"><h1 style="color:#E50914;font-size:32px;font-weight:800;"><i class="fas fa-play-circle"></i> CINESTREAM</h1></div>', unsafe_allow_html=True)
@@ -420,7 +540,8 @@ elif st.session_state.page == "detail":
     if st.button("Envoyer l'avis", key="send_comment"):
         if comment_input.strip():
             sentiment, style, conf = predict(comment_input)
-            save_comment(film["id"], film["title"], comment_input, f"{sentiment} ({conf}%)", style)
+            user_id = st.session_state.user['id'] if st.session_state.user else None
+            save_comment(film["id"], film["title"], comment_input, f"{sentiment} ({conf}%)", style, user_id)
             st.success(f"Avis enregistré !")
             st.rerun()
 
@@ -436,7 +557,8 @@ elif st.session_state.page == "detail":
                 transcribed = recognizer.recognize_google(recorded, language="fr-FR")
                 st.info(f"Transcription : {transcribed}")
                 sentiment, style, conf = predict(transcribed)
-                save_comment(film["id"], film["title"], f"[Vocal] {transcribed}", f"{sentiment} ({conf}%)", style)
+                user_id = st.session_state.user['id'] if st.session_state.user else None
+                save_comment(film["id"], film["title"], f"[Vocal] {transcribed}", f"{sentiment} ({conf}%)", style, user_id)
                 st.success(f"Avis vocal enregistré !")
                 st.rerun()
             except:
@@ -581,6 +703,11 @@ elif st.session_state.page == "admin":
         st.dataframe(df_display.sort_values("Date", ascending=False), use_container_width=True)
 
         if st.button("Réinitialiser les données"):
-            if os.path.exists(COMMENTS_FILE): os.remove(COMMENTS_FILE)
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("DELETE FROM comments")
+            conn.commit()
+            cur.close()
+            conn.close()
             st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)

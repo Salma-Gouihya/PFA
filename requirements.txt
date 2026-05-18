@@ -1,0 +1,11 @@
+streamlit
+joblib
+nltk
+SpeechRecognition
+psycopg2-binary
+passlib
+matplotlib
+pandas
+numpy
+wordcloud
+scikit-learn
